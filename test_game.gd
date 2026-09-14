@@ -31,6 +31,7 @@ func _run() -> void:
 	await _raise_chain_concede()
 	await _refuse_raise()
 	await _mon_reste()
+	await _mon_reste_response()
 	await _full_game()
 	await _redeal()
 	await _direct_checks()
@@ -185,6 +186,21 @@ func d_capture_and_pass_raise(g, p) -> void:
 	g.pass_raise(p)
 
 
+func d_no_raise_vs_mon_reste(g, p) -> void:
+	acted = 0
+	g.raise_more(p)  # must be rejected: a mon reste can only be accepted or folded
+	check(acted == 0, "re-raise against a mon reste is rejected")
+	g.accept_raise(p)
+
+
+func d_no_raise_at_full_bet(g, p) -> void:
+	acted = 0
+	g.offer_raise(p)  # must be rejected: the round is already worth the whole game
+	g.offer_mon_reste(p)
+	check(acted == 0, "no raising once the bet is the whole game")
+	g.pass_raise(p)
+
+
 func _otherp(p) -> Player:
 	return game.player_2 if p == game.player_1 else game.player_1
 
@@ -291,6 +307,17 @@ func _mon_reste() -> void:
 	await free_game()
 
 
+func _mon_reste_response() -> void:
+	print("scenario: mon reste must be accepted or conceded, never re-raised")
+	new_game()
+	queue = [d_pass_redeal, d_pass_raise, d_mon_reste, d_no_raise_vs_mon_reste, d_play_first, d_play_first, d_no_raise_at_full_bet]
+	await play_out(0)  # the accepted mon reste ends the game
+
+	check(games.size() == 1, "game ended")
+	check(rounds.size() == 1 and rounds[0][1] == game.points_to_win, "mon reste round stands at the full stake")
+	await free_game()
+
+
 func _redeal() -> void:
 	print("scenario: redeal proposal accepted")
 	new_game()
@@ -326,13 +353,18 @@ func _direct_checks() -> void:
 
 	game.phase = Game.Phase.RAISE_RESPONSE
 	game.decision_player = p1
+	game.mon_reste_pending = true
+	game.pending_bet = 5  # below the cap: only the mon reste flag can block this
+	game.raise_more(p1)
+	check(acted == 0, "re-raise against a mon reste is rejected by the flag")
+	game.mon_reste_pending = false
 	game.pending_bet = game.points_to_win
 	game.raise_more(p1)
 	check(acted == 0, "cannot re-raise once the pending bet is the whole game")
 	game.pending_bet = game.points_to_win - 1
 	game.raise_more(p1)
 	check(acted == 1, "re-raise accepted while below the cap")
-	free_game()
+	await free_game()
 
 
 func _full_game() -> void:

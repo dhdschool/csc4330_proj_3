@@ -17,9 +17,11 @@ class_name Game
 ##    are played. With no 2-trick winner, the winner of the first won trick
 ##    wins the round; three tied tricks award no points.
 ##  - Before each trick either player may raise the bet by raise_step or go
-##    "mon reste" (bet the whole game). The responder must concede at the
-##    stake before the raise, accept it, or re-raise by 2 (capped at the
-##    whole game).
+##    "mon reste" (bet the whole game). A pending raise must be answered by
+##    accepting it, re-raising by 2 (capped at the whole game, and never
+##    against a mon reste), or conceding at the stake before the raise:
+##    declining a raise IS conceding. Once the round is worth the whole
+##    game no further raises are possible.
 
 enum Phase { IDLE, REDEAL_OFFER, REDEAL_RESPONSE, RAISE_WINDOW, RAISE_RESPONSE, PLAY, GAME_OVER }
 
@@ -43,6 +45,7 @@ var decision_player: Player  # must act during redeal / raise phases
 
 var bet: int = 0  # agreed stake of the current round
 var pending_bet: int = 0  # raise under negotiation
+var mon_reste_pending: bool = false  # the pending raise is a mon reste (answer: accept or fold only)
 var tricks_left: int = 0
 var trick_wins: Dictionary = {}  # Player -> tricks won this round
 var trick_cards: Array[CardData] = []  # cards of the trick in play, in play order
@@ -110,15 +113,16 @@ func pass_raise(player: Player) -> void:
 		_submit({ "action": "pass_raise", "player": player })
 
 
-## Offer to raise the bet by raise_step (Phase.RAISE_WINDOW).
+## Offer to raise the bet by raise_step (Phase.RAISE_WINDOW; nothing above
+## the whole game, so not once the bet already is the whole game).
 func offer_raise(player: Player) -> void:
-	if phase == Phase.RAISE_WINDOW and player == decision_player:
+	if phase == Phase.RAISE_WINDOW and player == decision_player and bet < points_to_win:
 		_submit({ "action": "offer_raise", "player": player })
 
 
 ## Bet the whole game on this round (Phase.RAISE_WINDOW).
 func offer_mon_reste(player: Player) -> void:
-	if phase == Phase.RAISE_WINDOW and player == decision_player:
+	if phase == Phase.RAISE_WINDOW and player == decision_player and bet < points_to_win:
 		_submit({ "action": "mon_reste", "player": player })
 
 
@@ -128,10 +132,11 @@ func accept_raise(player: Player) -> void:
 		_submit({ "action": "accept_raise", "player": player })
 
 
-## Re-raise the pending bet (Phase.RAISE_RESPONSE, decision_player; only
-## while the pending bet is still below the whole game).
+## Re-raise the pending bet (Phase.RAISE_RESPONSE, decision_player; never
+## against a mon reste, and only while below the whole game).
 func raise_more(player: Player) -> void:
-	if phase == Phase.RAISE_RESPONSE and player == decision_player and pending_bet < points_to_win:
+	if phase == Phase.RAISE_RESPONSE and player == decision_player \
+			and not mon_reste_pending and pending_bet < points_to_win:
 		_submit({ "action": "raise_more", "player": player })
 
 
@@ -141,6 +146,7 @@ func _play_round() -> void:
 	round_is_playing = true
 	bet = min_bet
 	pending_bet = 0
+	mon_reste_pending = false
 	tricks_left = 3
 	trick_wins = { player_1: 0, player_2: 0 }
 	first_trick_winner = null
@@ -192,10 +198,12 @@ func _raise_window() -> void:
 		match _pending.action:
 			"offer_raise":
 				pending_bet = bet + raise_step
+				mon_reste_pending = false
 				await _negotiate_raise(_pending.player)
 				return  # one raise negotiation per trick
 			"mon_reste":
 				pending_bet = points_to_win
+				mon_reste_pending = true
 				await _negotiate_raise(_pending.player)
 				return
 			_:  # pass_raise: the other player may still raise
@@ -219,6 +227,7 @@ func _negotiate_raise(offerer: Player) -> void:
 				pending_bet = mini(pending_bet + raise_step, points_to_win)
 				responder = _other(responder)  # roles swap on a re-raise
 			_:
+				_end_round(_other(responder))  # declining a raise concedes at the pre-raise stake
 				return
 
 
@@ -266,6 +275,7 @@ func _end_round(winner: Player) -> void:
 	round_is_playing = false
 	bet = 0
 	pending_bet = 0
+	mon_reste_pending = false
 	phase = Phase.IDLE
 	decision_player = null
 	current_player = null
