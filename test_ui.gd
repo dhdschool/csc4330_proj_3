@@ -84,5 +84,3 @@ func run() -> void:
 	await process_frame
 	print("UI CHECKS PASSED" if failures == 0 else "UI CHECKS FAILED: %d" % failures)
 	quit(0 if failures == 0 else 1)
-
-

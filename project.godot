@@ -14,11 +14,6 @@ config/name="proj-3-game"
 run/main_scene="res://ui/main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
-<<<<<<<HEADrun/main_scene="uid://b5l4t015e2tll"
-
-[autoload]
-
-Server="*uid://dyof8k6wcwc3k"
 
 [display]
 

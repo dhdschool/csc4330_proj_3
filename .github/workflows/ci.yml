@@ -40,10 +40,16 @@ jobs:
           unzip -q templates.tpz -d "$TPL_DIR"
           mv "$TPL_DIR"/templates/* "$TPL_DIR" && rmdir "$TPL_DIR"/templates
 
-      # Fresh checkouts have no .godot/; this import pass also regenerates the
-      # global class cache that headless -s scripts need (class_name Server).
+      # Fresh checkouts have no .godot/; --import waits for the resource and
+      # script scan (an --editor --quit pass can quit before it finishes).
+      # Headless -s scripts resolve class_name identifiers from this cache.
       - name: Import project
-        run: timeout 300 ./godot --headless --editor --quit
+        run: timeout 300 ./godot --headless --path . --import
+
+      - name: Verify global class cache
+        run: |
+          grep -q '&"Server"' .godot/global_script_class_cache.cfg \
+            || { echo "class_name Server missing from the class cache — was it dropped from server.gd again?"; exit 1; }
 
       - name: Rules engine tests
         run: timeout 120 ./godot --headless --path . -s res://test_game.gd
