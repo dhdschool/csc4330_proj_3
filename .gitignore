@@ -1,3 +1,10 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# CI / local export workflow artifacts
+/godot
+/godot.zip
+/templates.tpz
+/builds/
+_net_*.flag

@@ -54,6 +54,10 @@ From the project directory, using your Godot executable:
     TRUC_ROLE=host  godot --headless --path . -s res://test_net.gd
     TRUC_ROLE=guest godot --headless --path . -s res://test_net.gd
 
+GitHub Actions (.github/workflows/ci.yml) runs every check and exports the
+Linux and Windows builds on each push to main and on pull requests; the
+builds are attached as workflow artifacts.
+
 The original components/card.tscn references res://card.gd, which does not exist.
 The new UI does not use that scene. The card-design teammate should update that
 reference to res://components/card.gd if reusing it.

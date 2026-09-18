@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7-stable
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot editor
+        run: |
+          curl -sL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -o godot.zip
+          unzip -q godot.zip
+          mv Godot_v${GODOT_VERSION}_linux.x86_64 godot
+          chmod +x godot
+
+      - name: Cache export templates
+        id: templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}
+
+      - name: Install export templates
+        if: steps.templates.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz" -o templates.tpz
+          TPL_DIR=~/.local/share/godot/export_templates/${GODOT_VERSION/-/.}
+          mkdir -p "$TPL_DIR"
+          unzip -q templates.tpz -d "$TPL_DIR"
+          mv "$TPL_DIR"/templates/* "$TPL_DIR" && rmdir "$TPL_DIR"/templates
+
+      # Fresh checkouts have no .godot/; this import pass also regenerates the
+      # global class cache that headless -s scripts need (class_name Server).
+      - name: Import project
+        run: timeout 300 ./godot --headless --editor --quit
+
+      - name: Rules engine tests
+        run: timeout 120 ./godot --headless --path . -s res://test_game.gd
+
+      - name: UI tests
+        run: timeout 180 ./godot --headless --path . -s res://test_ui.gd
+
+      - name: Network tests (loopback)
+        run: |
+          rm -f _net_host.flag _net_done.flag
+          timeout 120 ./godot --headless --path . -s res://test_net.gd
+
+      - name: Network tests (two-process IPv6)
+        run: |
+          rm -f _net_host.flag _net_done.flag
+          timeout 120 env TRUC_ROLE=host ./godot --headless --path . -s res://test_net.gd &
+          HOST_PID=$!
+          sleep 3
+          timeout 120 env TRUC_ROLE=guest ./godot --headless --path . -s res://test_net.gd
+          GUEST=$?
+          wait $HOST_PID
+          HOST=$?
+          rm -f _net_host.flag _net_done.flag
+          [ "$HOST" -eq 0 ] && [ "$GUEST" -eq 0 ]
+
+      - name: Build Linux
+        run: |
+          mkdir -p builds
+          timeout 300 ./godot --headless --path . --export-release "Linux" builds/le-truc-linux.x86_64
+
+      - name: Build Windows
+        run: timeout 300 ./godot --headless --path . --export-release "Windows Desktop" builds/le-truc-windows.exe
+
+      - name: Upload builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: le-truc-${{ github.sha }}
+          path: builds/
+          if-no-files-found: error

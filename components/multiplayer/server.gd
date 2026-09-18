@@ -1,6 +1,5 @@
 extends Node
 
-class_name Server
 
 ## Authoritative multiplayer host for Le Truc.
 ##
