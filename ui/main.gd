@@ -11,12 +11,18 @@ const CARD_ART = {
 	CardData.Rank.EIGHT: preload("res://cards/card-7.png"),
 	CardData.Rank.SEVEN: preload("res://cards/card-8.png"),
 }
+const ONLINE_SESSION = preload("res://ui/online_session.gd")
 var session: Node
+var local_session: Node
 var shown_seat := 0
 var state: Dictionary = {}
 var column: VBoxContainer
 var busy := false
 var page := "menu"
+var online := false
+var online_address := ""
+var online_feedback := ""
+var address_edit: LineEdit
 var tutorial_step := 0
 var tutorial_feedback := ""
 var scroll_view: ScrollContainer
@@ -50,6 +56,7 @@ func _ready() -> void:
 	theme = theme_resource
 	_apply_theme()
 	session = SESSION.new()
+	local_session = session
 	add_child(session)
 	session.changed.connect(_refresh)
 	_menu()
@@ -80,6 +87,7 @@ func _button(text: String, callback: Callable, parent: Node = null) -> Button:
 	return button
 
 func _menu() -> void:
+	_end_online()
 	page = "menu"
 	_clear()
 	column.add_theme_constant_override("separation", 28)
@@ -127,11 +135,76 @@ func _online_menu() -> void:
 	page = "online"
 	_clear()
 	_label("ONLINE PLAY", 36)
-	_label("Coming soon", 28)
-	_label("Online connections are not available yet. Choose Local Play to play a complete match on this computer.")
+	_label("Two computers, one match. One player hosts; the other joins over the local network.")
+	address_edit = LineEdit.new()
+	address_edit.name = "AddressEdit"
+	address_edit.placeholder_text = "Host address  (e.g. ::1 or 192.168.1.42)"
+	address_edit.custom_minimum_size = Vector2(minf(620, maxf(240, size.x - 72)), 52)
+	address_edit.text = online_address
+	column.add_child(address_edit)
+	_button("Join game", _join_online)
+	_button("Host a game", _host_online)
+	if not online_feedback.is_empty():
+		_label(online_feedback, 20)
+		online_feedback = ""
+	_label("Hosting uses UDP port %d. The host keeps the deck — only your own hand ever reaches this screen." % Server.DEFAULT_PORT, 16)
 	_button("Back", _menu)
 
+
+func _host_online() -> void:
+	_enter_online()
+	if session.host() != OK:
+		_online_failed("Could not open the room (is UDP port %d already busy?)." % Server.DEFAULT_PORT)
+		return
+	session.start()  # start/restart is host-controlled
+
+
+func _join_online() -> void:
+	online_address = address_edit.text.strip_edges()
+	if online_address.is_empty():
+		online_feedback = "Enter the host player's address first."
+		_online_menu()
+		return
+	_enter_online()
+	if session.join(online_address) != OK:
+		_online_failed("Could not start connecting to %s." % online_address)
+
+
+func _enter_online() -> void:
+	_end_online()
+	online = true
+	page = "game"
+	shown_seat = 0
+	busy = false
+	session = ONLINE_SESSION.new()
+	session.name = "OnlineSession"  # fixed path on every machine: RPCs match
+	add_child(session)
+	session.changed.connect(_refresh)
+	session.failed.connect(_online_failed)
+
+
+func _online_failed(reason: String) -> void:
+	_end_online()
+	online_feedback = reason
+	_online_menu()
+
+
+func _end_online() -> void:
+	if not online:
+		return
+	online = false
+	var net := session
+	session = local_session
+	net.stop()
+	net.queue_free()
+
+
+func _restart_online() -> void:
+	session.start()
+
+
 func _start() -> void:
+	_end_online()
 	page = "game"
 	shown_seat = 0
 	busy = false
@@ -141,17 +214,32 @@ func _refresh() -> void:
 	if page != "game":
 		return
 	busy = false
+	if online:
+		shown_seat = session.seat  # the wire view is fixed to this machine's seat
 	state = session.snapshot_for(session.seat)
 	_clear()
 	_game_header()
+	if online and session.seat == 0:
+		_label("Waiting for the host…", 28)
+		return
 	_label("Player 1  ·  %d     |     Player 2  ·  %d     •     First to %d" % [state.scores[0], state.scores[1], state.target], 24)
 	if not state.winner.is_empty():
 		_label(state.winner + " wins!", 36)
-		_button("Play again", _start)
+		if online and session.hosting:
+			_button("Play again", _restart_online)
+		elif online:
+			_label("The host can start a rematch.", 20)
+		else:
+			_button("Play again", _start)
 		_button("Back to start", _menu)
 		_history()
 		return
 	if shown_seat != state.active_seat:
+		if online:
+			_label("Player %d is deciding…" % state.active_seat, 28)
+			_label("Your hand stays hidden from your opponent; the table updates on its own.")
+			_history()
+			return
 		_label("Pass to Player %d" % state.active_seat, 32)
 		_label("Hands are hidden. When the other player has looked away, reveal your cards.")
 		_button("Reveal my hand", _reveal)
@@ -177,7 +265,8 @@ func _refresh() -> void:
 	for action in state.actions:
 		if action != "play_card":
 			_button(ACTION_LABELS[action], _act.bind(action, -1), controls)
-	_button("Hide hand / pass computer", _hide)
+	if not online:
+		_button("Hide hand / pass computer", _hide)
 	_label("Strength: 9 < 10 < V < D < R < A < 8 < 7  •  Suits do not break ties", 16)
 	_history()
 

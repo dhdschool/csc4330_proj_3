@@ -33,7 +33,7 @@ func _seat(player: Player) -> int:
 func _player(id: int) -> Player:
 	return game.player_1 if id == 1 else game.player_2
 
-func card_text(card: CardData) -> String:
+static func card_text(card: CardData) -> String:
 	return ["9", "10", "V", "D", "R", "A", "8", "7"][card.rank] + " " + ["Hearts", "Diamonds", "Spades", "Clubs"][card.suit]
 
 func _awaiting(player: Player, _phase: int) -> void:
