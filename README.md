@@ -42,8 +42,8 @@ to both peers. Revision numbers reject stale or duplicate actions within a sessi
 
 From the project directory, using your Godot executable:
 
-    godot --headless --path . -s res://test_game.gd
-    godot --headless --path . -s res://test_ui.gd
+	godot --headless --path . -s res://test_game.gd
+	godot --headless --path . -s res://test_ui.gd
 
 The original components/card.tscn references res://card.gd, which does not exist.
 The new UI does not use that scene. The card-design teammate should update that
@@ -51,4 +51,3 @@ reference to res://components/card.gd if reusing it.
 
 ## Learning pages and theme
 The main menu includes Game Rules and Tutorial. Tutorial is a scripted, interactive teaching round (not a live opponent), with retry feedback and no effect on match scores. The shared sage/forest/cream theme and learning pages are in ui/main.gd. Online Play remains a placeholder.
-
