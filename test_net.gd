@@ -11,6 +11,7 @@ extends SceneTree
 ##   godot --headless --path . -s res://test_net.gd
 ##   TRUC_ROLE=host  godot --headless --path . -s res://test_net.gd
 ##   TRUC_ROLE=guest godot --headless --path . -s res://test_net.gd
+const ONLINE_SESSION = preload("res://ui/online_session.gd")
 
 var started_port := -1
 var connected_flag := false
@@ -18,10 +19,11 @@ var stopped_flag := false
 const PORT := 24565
 const HOST_FLAG := "res://_net_host.flag"
 const DONE_FLAG := "res://_net_done.flag"
-
 var failures := 0
+
 var server: Server
 var client: Client
+var online: Node  # ui/online_session.gd instance in the role scenarios
 var me := 1  # seat this process drives
 var my_plays := 0
 var forged_tested := false
@@ -48,6 +50,7 @@ func _run() -> void:
 			await _guest_role()
 		_:
 			await _loopback()
+			await _adapter()
 	print("")
 	if failures == 0:
 		print("NET CHECKS PASSED (%s)" % OS.get_environment("TRUC_ROLE"))
@@ -138,13 +141,17 @@ func _loopback() -> void:
 # --- host role: real socket, drives seat 1, waits for the guest ---------------
 
 func _host_role() -> void:
-	print("scenario: two-process host over IPv6")
+	print("scenario: two-process host over IPv6 (online session adapter)")
 	await build_tree()
-	check(server.start_server(PORT) == OK, "start_server returns OK (bound to ::)")
+	online = ONLINE_SESSION.new()
+	online.name = "OnlineSession"
+	root.add_child(online)
+	await process_frame  # deferred Client._find_server wiring
+	check(online.host(PORT) == OK, "start_server returns OK (bound to ::)")
 	check(get_multiplayer().get_unique_id() == 1, "host peer id is 1")
 	server.game.round_ended.connect(func(winner: Player, points: int) -> void: round_result = [server._seat_of(winner), points])
-	client.start_game()
-	client.state_changed.connect(drive)
+	online.start()
+	online.changed.connect(_drive_view)
 	_flag(HOST_FLAG, "ready")
 	var frames := 0
 	while round_result.is_empty() and frames < 3000:
@@ -154,38 +161,104 @@ func _host_role() -> void:
 	check(not round_result.is_empty(), "guest connected and a round ended over IPv6")
 	check(round_result == [1, 1],
 			"guest (seat 2) conceded the min bet to the host — the forged seat-1 concede was not honored")
-	server.stop_server()
+	online.stop()
 	_flag(DONE_FLAG, "done")
 
 # --- guest role: joins ::1, drives seat 2, tries one forged action -----------
 
 func _guest_role() -> void:
 	me = 2
-	print("scenario: two-process guest over IPv6")
+	print("scenario: two-process guest over IPv6 (online session adapter)")
 	await build_tree()
+	online = ONLINE_SESSION.new()
+	online.name = "OnlineSession"
+	root.add_child(online)
+	await process_frame
 	var up := await _wait_for(func() -> bool: return FileAccess.file_exists(HOST_FLAG), 100)
 	check(up, "host room came up")
-	client.connected_to_server.connect(func() -> void: connected_flag = true)
-	check(client.connect_to_server("::1", PORT) == OK, "connect_to_server(::1) accepted")
-	connected_flag = await _wait_for(func() -> bool: return connected_flag, 100)
+	check(online.join("::1", PORT) == OK, "connect request accepted")
+	connected_flag = await _wait_for(func() -> bool: return get_multiplayer().multiplayer_peer != null \
+			and get_multiplayer().multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED, 1000)
 	check(connected_flag, "connected over IPv6 loopback")
 
-	var seated := await _wait_for(func() -> bool: return client.seat == 2, 100)
+	var seated := await _wait_for(func() -> bool: return online.seat == 2, 1000)
 	check(seated, "guest is bound to seat 2")
-	check(client.state.get("hand", []).size() == 3, "guest received its own hand")
-	client.state_changed.connect(_guest_drive)
-	_guest_drive(client.state)  # the stuck phase may already be ours to act on
+	check(online.snapshot_for(2).hand.size() == 3, "guest received its own hand")
+	online.changed.connect(_guest_drive_view)
+	_guest_drive_view()  # the stuck phase may already be ours to act on
 	var done := await _wait_for(func() -> bool: return FileAccess.file_exists(DONE_FLAG), 600)
 	check(done, "round finished on the host")
 	await process_frame
 
-func _guest_drive(snap: Dictionary) -> void:
-	if not forged_tested and snap.get("phase") == Game.Phase.PLAY:
+func _guest_drive_view() -> void:
+	var view: Dictionary = online.snapshot_for(2)
+	if not forged_tested and view.get("phase") == Game.Phase.PLAY:
 		forged_tested = true
 		# Claim the OPPONENT's seat; the host must drop it. The host-side
 		# result check proves it: an honored concede would award seat 2.
 		server.rpc_id(1, "s_action", 1, "concede", [])
-	drive(snap)
+	_drive_view()
+
+
+## Reactive driver over the adapter's local-contract view (both roles).
+func _drive_view() -> void:
+	var view: Dictionary = online.snapshot_for(me)
+	var actions: Array = view.get("actions", [])
+	if actions.is_empty():
+		return
+	var revision := int(view.get("revision", -1))
+	if actions.has("play_card"):
+		my_plays += 1
+		if OS.get_environment("TRUC_ROLE") == "guest" and my_plays >= 2:
+			online.submit(me, "concede", -1, revision)  # give the round away in trick 2
+		else:
+			online.submit(me, "play_card", 0, revision)
+	elif actions.has("pass_redeal"):
+		online.submit(me, "pass_redeal", -1, revision)
+	elif actions.has("pass_raise"):
+		online.submit(me, "pass_raise", -1, revision)
+	elif actions.has("accept_raise"):
+		online.submit(me, "accept_raise", -1, revision)
+
+# --- adapter contract: main.gd's session interface over the p2p layer --------
+
+func _adapter() -> void:
+	print("scenario: online session adapter contract (loopback)")
+	seed(7)
+	online = ONLINE_SESSION.new()
+	online.name = "OnlineSession"
+	root.add_child(online)
+	await process_frame
+	check(online.host(PORT) == OK, "adapter hosts through the Server node")
+	online.start()
+	var seated := await _wait_for(func() -> bool: return online.seat == 1, 60)
+	check(seated, "adapter is seated as the host")
+	var dealt := await _wait_for(func() -> bool: return (online.snapshot_for(1).get("hand", []) as Array).size() == 3, 60)
+	check(dealt, "adapter receives its dealt hand")
+	var view: Dictionary = online.snapshot_for(1)
+	check(view.has_all(["seat", "active_seat", "revision", "hand", "actions", "phase", "scores",
+			"hand_counts", "bet", "pending_bet", "target", "round", "dealer", "winner", "table", "history"]),
+			"view carries the full local session contract")
+	check(not view.has("your_seat") and not view.has("opp_cards") and not view.has("points"),
+			"wire-only fields stay out of the view")
+	check(view.hand.size() == 3 and str(view.hand[0].label).split(" ").size() == 2,
+			"hand renders as labeled cards")
+	check(not online.submit(2, "concede", -1, view.revision), "wrong seat rejected by the adapter")
+	check(not online.submit(1, "concede", -1, view.revision - 1), "stale revision rejected by the adapter")
+	var actions: Array = view.actions
+	if actions.is_empty():
+		check(not online.submit(1, "pass_redeal", -1, view.revision),
+				"out-of-turn action rejected by the adapter")
+	else:
+		var pick: String = actions[0]
+		check(online.submit(1, pick, 0 if pick == "play_card" else -1, view.revision),
+				"legal action accepted")
+		var moved := await _wait_for(func() -> bool: return online.snapshot_for(1).revision > view.revision, 60)
+		check(moved, "action advanced the match")
+	online.stop()
+	online.queue_free()
+	await process_frame
+	check(not server.is_hosting(), "adapter stop tears the room down")
 
 # --- helpers --------------------------------------------------------------------
 

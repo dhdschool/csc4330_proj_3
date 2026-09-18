@@ -12,13 +12,9 @@ config_version=5
 
 config/name="proj-3-game"
 run/main_scene="res://ui/main.tscn"
-run/main_scene="uid://b5l4t015e2tll"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
-[autoload]
-
-Server="*uid://dyof8k6wcwc3k"
 
 [display]
 
