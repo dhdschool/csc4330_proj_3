@@ -1,5 +1,16 @@
 extends Control
 const SESSION = preload("res://ui/local_session.gd")
+# Artwork numbers represent strength; the original rank enum stays unchanged.
+const CARD_ART = {
+	CardData.Rank.NINE: preload("res://cards/card-1.png"),
+	CardData.Rank.TEN: preload("res://cards/card-2.png"),
+	CardData.Rank.VALET: preload("res://cards/card-3.png"),
+	CardData.Rank.DAME: preload("res://cards/card-4.png"),
+	CardData.Rank.ROI: preload("res://cards/card-5.png"),
+	CardData.Rank.ACE: preload("res://cards/card-6.png"),
+	CardData.Rank.EIGHT: preload("res://cards/card-7.png"),
+	CardData.Rank.SEVEN: preload("res://cards/card-8.png"),
+}
 var session: Node
 var shown_seat := 0
 var state: Dictionary = {}
@@ -90,6 +101,28 @@ func _menu() -> void:
 	var footer := _label("Two players. Three cards. One well-timed bluff.", 16)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
+func _card_button(rank: int, label: String, callback: Callable, parent: Node) -> Button:
+	var button := _button(label, callback, parent)
+	button.icon = CARD_ART[rank]
+	button.expand_icon = true
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	button.custom_minimum_size = Vector2(150, 184)
+	button.tooltip_text = label
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("fff5dc")
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(6)
+	for kind in ["normal", "hover", "pressed", "disabled"]:
+		button.add_theme_stylebox_override(kind, style)
+	var ink := Color("a72d35") if label.ends_with("Hearts") or label.ends_with("Diamonds") else Color("182e3c")
+	for kind in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
+		button.add_theme_color_override(kind, ink)
+	for kind in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color", "icon_disabled_color"]:
+		button.add_theme_color_override(kind, Color.WHITE)
+	return button
+
 func _online_menu() -> void:
 	page = "online"
 	_clear()
@@ -135,17 +168,7 @@ func _refresh() -> void:
 	column.add_child(cards)
 	for index in state.hand.size():
 		var card: Dictionary = state.hand[index]
-		var button := _button(card.label.replace(" ", "\n"), _act.bind("play_card", index), cards)
-		button.custom_minimum_size = Vector2(150, 160)
-		button.add_theme_font_size_override("font_size", 26)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color("fff5dc")
-		style.set_corner_radius_all(12)
-		for kind in ["normal", "hover", "pressed", "disabled"]:
-			button.add_theme_stylebox_override(kind, style)
-		var ink := Color("a72d35") if card.suit < 2 else Color("182e3c")
-		for kind in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
-			button.add_theme_color_override(kind, ink)
+		var button := _card_button(card.rank, card.label, _act.bind("play_card", index), cards)
 		button.disabled = not state.actions.has("play_card")
 	var controls := HFlowContainer.new()
 	controls.add_theme_constant_override("h_separation", 12)
@@ -218,7 +241,7 @@ func _rules() -> void:
 	for section in [
 		["01  •  The goal", "Two players compete to reach 12 points. Each round starts at a stake of 1 point. A round contains up to three tricks; a trick is one card played by each player."],
 		["02  •  Cards & dealing", "Each player receives three cards. The first dealer is random; dealing alternates after every round. The non-dealer leads the first trick. Before play, the non-dealer may request one redeal; both hands are replaced only if the dealer agrees."],
-		["03  •  Card strength", "Weakest → strongest: 9 < 10 < V < D < R < A < 8 < 7.\nV = Jack, D = Queen, R = King. Suits do not affect strength. Equal ranks tie."],
+		["03  •  Card strength", "Weakest → strongest: 9 < 10 < V < D < R < A < 8 < 7.\nV = Jack, D = Queen, R = King. Suits do not affect strength. Equal ranks tie. Artwork is numbered 1–8 in this strength order; the caption identifies the original rank and suit."],
 		["04  •  Winning tricks & rounds", "The higher card wins the trick and its player leads next. After a tied trick, the same player leads. Win two tricks to win the round. If neither player wins two, the player who won the first non-tied trick wins the round. Three tied tricks award no points."],
 		["05  •  Raising the stakes", "Before each trick, players may continue without raising, raise by 2, or offer mon reste. A raised stake must be accepted. The responder may accept, re-raise by 2 when allowed, or concede. Re-raises alternate between players and are capped at the 12-point match stake."],
 		["06  •  Mon reste & conceding", "Mon reste makes the round worth the whole match: 12 points in this implementation. It may only be accepted or conceded, never re-raised. Conceding awards the opponent the previously agreed stake, not an unaccepted raise. The local interface offers Concede round on your action turns."],
@@ -275,9 +298,8 @@ func _practice_cards(cards: Array, clickable: bool) -> void:
 	row.add_theme_constant_override("h_separation", 16)
 	column.add_child(row)
 	for card in cards:
-		var button := _button(card.replace(" ", "\n"), _tutorial_card.bind(card), row)
-		button.custom_minimum_size = Vector2(150, 160)
-		button.add_theme_font_size_override("font_size", 26)
+		var rank := ["9", "10", "V", "D", "R", "A", "8", "7"].find(card.get_slice(" ", 0))
+		var button := _card_button(rank, card, _tutorial_card.bind(card), row)
 		button.disabled = not clickable
 
 func _tutorial_card(card: String) -> void:

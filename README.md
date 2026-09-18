@@ -12,10 +12,11 @@ The original rules in components/game.gd are unchanged.
 ## Team handoff
 
 - ui/main.tscn is the configured main scene.
-- ui/main.gd builds the interface. Placeholder cards are created in the hand loop
-  in _refresh(); replace those Buttons with the team's card scene while keeping
-  the callback _act("play_card", hand_index). Rank and suit are numeric enum values
-  matching components/card_data.gd; label is a fallback description.
+- ui/main.gd builds the interface. CARD_ART maps NINE, TEN, VALET, DAME, ROI,
+  ACE, EIGHT, SEVEN to card-1.png through card-8.png respectively. Hand and tutorial
+  Buttons show the artwork above the original rank/suit caption; card-9.png is
+  unused. The callback _act("play_card", hand_index), rank/suit enums, and session
+  data remain unchanged.
 - ui/local_session.gd owns the rules instance and exposes plain-data snapshots and
   validated commands. changed tells the interface to refresh after rules advance.
 - test_ui.gd drives complete matches through the UI action path and checks stale
