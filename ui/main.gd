@@ -1,5 +1,6 @@
 extends Control
 const SESSION = preload("res://ui/local_session.gd")
+const CARD_SCENE = preload("res://components/card.tscn")
 var session: Node
 var shown_seat := 0
 var state: Dictionary = {}
@@ -129,23 +130,29 @@ func _refresh() -> void:
 	var prompts := {Game.Phase.REDEAL_OFFER: "Keep your hand or request a fresh deal.", Game.Phase.REDEAL_RESPONSE: "Your opponent requests a redeal. Do you agree?", Game.Phase.RAISE_WINDOW: "Continue, raise the stake, or bet the match.", Game.Phase.RAISE_RESPONSE: "Your opponent raised. Accept, re-raise when allowed, or concede.", Game.Phase.PLAY: "Choose a card to play."}
 	_label("Player %d — %s" % [shown_seat, prompts.get(state.phase, "")], 24)
 	_label("Opponent: %d cards remaining" % state.hand_counts[1 if shown_seat == 1 else 0], 16)
-	_label("Table / last trick: " + ("No cards played yet" if state.table.is_empty() else "    |    ".join(state.table)))
+	_label("Table / last trick")
+	if state.table.is_empty():
+		_label("No cards played yet", 16)
+	else:
+		var table_row := HFlowContainer.new()
+		table_row.add_theme_constant_override("h_separation", 16)
+		column.add_child(table_row)
+		for played in state.table:
+			var played_column := VBoxContainer.new()
+			table_row.add_child(played_column)
+			var owner := Label.new()
+			owner.text = "Player %d" % played.seat
+			played_column.add_child(owner)
+			var played_card := _card(played.rank, Callable(), played_column)
+			played_card.custom_minimum_size = Vector2(100, 100)
+			played_card.disabled = true
+	_label("Your hand", 18)
 	var cards := HFlowContainer.new()
 	cards.add_theme_constant_override("h_separation", 16)
 	column.add_child(cards)
 	for index in state.hand.size():
 		var card: Dictionary = state.hand[index]
-		var button := _button(card.label.replace(" ", "\n"), _act.bind("play_card", index), cards)
-		button.custom_minimum_size = Vector2(150, 160)
-		button.add_theme_font_size_override("font_size", 26)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color("fff5dc")
-		style.set_corner_radius_all(12)
-		for kind in ["normal", "hover", "pressed", "disabled"]:
-			button.add_theme_stylebox_override(kind, style)
-		var ink := Color("a72d35") if card.suit < 2 else Color("182e3c")
-		for kind in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
-			button.add_theme_color_override(kind, ink)
+		var button := _card(card.rank, _act.bind("play_card", index), cards)
 		button.disabled = not state.actions.has("play_card")
 	var controls := HFlowContainer.new()
 	controls.add_theme_constant_override("h_separation", 12)
@@ -155,12 +162,20 @@ func _refresh() -> void:
 		if action != "play_card":
 			_button(ACTION_LABELS[action], _act.bind(action, -1), controls)
 	_button("Hide hand / pass computer", _hide)
-	_label("Strength: 9 < 10 < V < D < R < A < 8 < 7  •  Suits do not break ties", 16)
+	_label("Strength: 1 < 2 < 3 < 4 < 5 < 6 < 7 < 8 < 9  •  Equal ranks tie", 16)
 	_history()
 
 func _reveal() -> void:
 	shown_seat = state.active_seat
 	_refresh()
+
+func _card(rank: int, callback: Callable, parent: Node) -> Card:
+	var card := CARD_SCENE.instantiate() as Card
+	card.data = CardData.new(rank)
+	if callback.is_valid():
+		card.pressed.connect(callback)
+	parent.add_child(card)
+	return card
 
 func _hide() -> void:
 	shown_seat = 0
@@ -217,8 +232,8 @@ func _rules() -> void:
 	_label("The rules used in this version of Le Truc", 20)
 	for section in [
 		["01  •  The goal", "Two players compete to reach 12 points. Each round starts at a stake of 1 point. A round contains up to three tricks; a trick is one card played by each player."],
-		["02  •  Cards & dealing", "Each player receives three cards. The first dealer is random; dealing alternates after every round. The non-dealer leads the first trick. Before play, the non-dealer may request one redeal; both hands are replaced only if the dealer agrees."],
-		["03  •  Card strength", "Weakest → strongest: 9 < 10 < V < D < R < A < 8 < 7.\nV = Jack, D = Queen, R = King. Suits do not affect strength. Equal ranks tie."],
+		["02  •  Cards & dealing", "The deck has 36 cards: four copies of each rank from 1 to 9, with no suits. Each player receives three cards. The first dealer is random; dealing alternates after every round. The non-dealer leads the first trick. Before play, the non-dealer may request one redeal; both hands are replaced only if the dealer agrees."],
+		["03  •  Card strength", "Weakest → strongest: 1 < 2 < 3 < 4 < 5 < 6 < 7 < 8 < 9.\nThe higher number wins. Equal ranks tie."],
 		["04  •  Winning tricks & rounds", "The higher card wins the trick and its player leads next. After a tied trick, the same player leads. Win two tricks to win the round. If neither player wins two, the player who won the first non-tied trick wins the round. Three tied tricks award no points."],
 		["05  •  Raising the stakes", "Before each trick, players may continue without raising, raise by 2, or offer mon reste. A raised stake must be accepted. The responder may accept, re-raise by 2 when allowed, or concede. Re-raises alternate between players and are capped at the 12-point match stake."],
 		["06  •  Mon reste & conceding", "Mon reste makes the round worth the whole match: 12 points in this implementation. It may only be accepted or conceded, never re-raised. Conceding awards the opponent the previously agreed stake, not an unaccepted raise. The local interface offers Concede round on your action turns."],
@@ -243,31 +258,31 @@ func _tutorial_render() -> void:
 	match tutorial_step:
 		0:
 			_label("1. Meet your hand", 28)
-			_label("You have 7 Hearts, 8 Clubs, and 9 Diamonds. The coach is the non-dealer and keeps their hand. You are the dealer. Select Keep these cards to continue the lesson.")
-			_practice_cards(["7 Hearts", "8 Clubs", "9 Diamonds"], false)
+			_label("You have ranks 9, 8, and 1. The coach is the non-dealer and keeps their hand. You are the dealer. Select Keep these cards to continue the lesson.")
+			_practice_cards([9, 8, 1], false)
 			_button("Keep these cards", _tutorial_advance)
 		1:
 			_label("2. Raise the stake", 28)
 			_label("The stake is 1 point. The coach passes their chance to raise. With two strong cards, try raising by 2. The coach will accept, making this round worth 3 points.")
 			_button("Raise by 2", _tutorial_advance)
 		2:
-			_label("3. Beat the ace", 28)
-			_label("The coach accepted: stake 3. They lead with A Spades. Click 7 Hearts to win this trick. In Le Truc, both 7 and 8 outrank an ace; save your 8 for the next trick.")
-			_practice_cards(["7 Hearts", "8 Clubs", "9 Diamonds"], true)
+			_label("3. Beat the 7", 28)
+			_label("The coach accepted: stake 3. They lead with rank 7. Click 9 to win this trick. Both 9 and 8 outrank 7; save your 8 for the next trick.")
+			_practice_cards([9, 8, 1], true)
 		3:
 			_label("4. Lead the next trick", 28)
-			_label("Your 7 beat the coach's ace, so you lead now. Both players keep the stake at 3. Play 8 Clubs; the coach will respond with R Hearts (a king).")
-			_practice_cards(["8 Clubs", "9 Diamonds"], true)
+			_label("Your 9 beat the coach's 7, so you lead now. Both players keep the stake at 3. Play 8; the coach will respond with rank 6.")
+			_practice_cards([8, 1], true)
 		4:
 			_label("5. You won the round!", 32)
-			_label("Trick 1: your 7 beat A.\nTrick 2: your 8 beat R.\nYou won two tricks, so the third card was not needed.")
+			_label("Trick 1: your 9 beat 7.\nTrick 2: your 8 beat 6.\nYou won two tricks, so the third card was not needed.")
 			_label("You  3  ·  Coach  0", 32)
 			_label("The accepted raise made this round worth 3 points. A real match continues with a new deal until someone reaches 12. You are ready to play!")
 			_button("Start Local Play", _start)
 			_button("Practice again", _tutorial_start)
 	if not tutorial_feedback.is_empty():
 		_label(tutorial_feedback, 20)
-	_label("Strength: 9 < 10 < V < D < R < A < 8 < 7", 18)
+	_label("Strength: 1 < 2 < 3 < 4 < 5 < 6 < 7 < 8 < 9", 18)
 	_button("Back to main menu", _menu)
 
 func _practice_cards(cards: Array, clickable: bool) -> void:
@@ -275,17 +290,15 @@ func _practice_cards(cards: Array, clickable: bool) -> void:
 	row.add_theme_constant_override("h_separation", 16)
 	column.add_child(row)
 	for card in cards:
-		var button := _button(card.replace(" ", "\n"), _tutorial_card.bind(card), row)
-		button.custom_minimum_size = Vector2(150, 160)
-		button.add_theme_font_size_override("font_size", 26)
+		var button := _card(card, _tutorial_card.bind(card), row)
 		button.disabled = not clickable
 
-func _tutorial_card(card: String) -> void:
-	var expected := "7 Hearts" if tutorial_step == 2 else "8 Clubs"
+func _tutorial_card(card: int) -> void:
+	var expected := 9 if tutorial_step == 2 else 8
 	if tutorial_step not in [2, 3]:
 		return
 	if card != expected:
-		tutorial_feedback = "The 8 also beats the ace, but try the 7 first for this lesson." if card == "8 Clubs" else "The 9 is the weakest card. Try the highlighted instruction above; 7 and 8 are your strongest cards."
+		tutorial_feedback = "The 8 also beats 7, but try the 9 first for this lesson." if card == 8 else "The 1 is the weakest card. Follow the instruction above; 9 and 8 are your strongest cards."
 		_tutorial_render()
 		return
 	_tutorial_advance()

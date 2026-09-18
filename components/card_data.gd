@@ -2,12 +2,12 @@ extends Resource
 
 class_name CardData
 
-enum Suit { HEARTS, DIAMONDS, SPADES, CLUBS }
-enum Rank { NINE, TEN, VALET, DAME, ROI, ACE, EIGHT, SEVEN }
+const MIN_RANK: int = 1
+const MAX_RANK: int = 9
 
-@export var suit: Suit = Suit.HEARTS
-@export var rank: Rank = Rank.SEVEN
+@export_range(1, 9) var rank: int = MIN_RANK:
+	set(value):
+		rank = clampi(value, MIN_RANK, MAX_RANK)
 
-func _init(suit_value: Suit, rank_value: Rank) -> void:
-	suit = suit_value
+func _init(rank_value: int = MIN_RANK) -> void:
 	rank = rank_value

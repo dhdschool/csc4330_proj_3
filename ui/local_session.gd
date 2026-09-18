@@ -7,7 +7,7 @@ var game: Game
 var seat := 0
 var revision := 0
 var history: Array[String] = []
-var table: Array[String] = []
+var table: Array[Dictionary] = []
 var round_number := 1
 var winner := ""
 
@@ -34,7 +34,7 @@ func _player(id: int) -> Player:
 	return game.player_1 if id == 1 else game.player_2
 
 func card_text(card: CardData) -> String:
-	return ["9", "10", "V", "D", "R", "A", "8", "7"][card.rank] + " " + ["Hearts", "Diamonds", "Spades", "Clubs"][card.suit]
+	return str(card.rank)
 
 func _awaiting(player: Player, _phase: int) -> void:
 	seat = _seat(player)
@@ -93,7 +93,7 @@ func submit(id: int, action: String, card_index: int, expected_revision: int) ->
 			table.clear()
 		var card: CardData = player.hand[card_index]
 		var played := "Player %d: %s" % [id, card_text(card)]
-		table.append(played)
+		table.append({"seat": id, "rank": card.rank})
 		_log(played)
 		game.play_card(player, card)
 	else:
@@ -117,7 +117,7 @@ func snapshot_for(id: int) -> Dictionary:
 	var hand: Array[Dictionary] = []
 	if id in [1, 2]:
 		for card in _player(id).hand:
-			hand.append({"rank": int(card.rank), "suit": int(card.suit), "label": card_text(card)})
+			hand.append({"rank": card.rank, "label": card_text(card)})
 	return {"seat": id, "active_seat": seat, "revision": revision,
 		"hand": hand, "actions": legal_actions(id), "phase": int(game.phase),
 		"scores": [game.player_1.points, game.player_2.points],
@@ -125,4 +125,4 @@ func snapshot_for(id: int) -> Dictionary:
 		"bet": game.bet, "pending_bet": game.pending_bet,
 		"target": game.points_to_win, "round": round_number,
 		"dealer": _seat(game.dealer), "winner": winner,
-		"table": table.duplicate(), "history": history.duplicate()}
+		"table": table.duplicate(true), "history": history.duplicate()}

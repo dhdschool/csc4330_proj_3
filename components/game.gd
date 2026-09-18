@@ -9,9 +9,8 @@ class_name Game
 ##  - Dealer deals 3 cards to each player; the non-dealer leads the first trick.
 ##  - Before play, the non-dealer may propose a redeal once; if the dealer
 ##    accepts, the hands are thrown in and redealt.
-##  - The winner of a trick is the higher rank; suits never count. Rank
-##    strength follows CardData.Rank order: 9 < 10 < V < D < R < A < 8 < 7.
-##    Equal ranks tie the trick.
+##  - Cards have only a numeric rank, from 1 (weakest) to 9 (strongest).
+##    The higher rank wins a trick; equal ranks tie the trick.
 ##  - A player may concede at any time; the opponent scores the current bet.
 ##  - A round ends when a player concedes, takes 2 tricks, or all 3 tricks
 ##    are played. With no 2-trick winner, the winner of the first won trick

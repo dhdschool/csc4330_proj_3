@@ -27,6 +27,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	await _deck_checks()
 	await _basic_round()
 	await _raise_chain_concede()
 	await _refuse_raise()
@@ -207,6 +208,32 @@ func _otherp(p) -> Player:
 
 # --- scenarios ---------------------------------------------------------------
 
+func _deck_checks() -> void:
+	print("scenario: numeric deck, unique cards, and recycling")
+	var deck := Deck.new()
+	root.add_child(deck)
+	check(deck.cards.size() == 36, "deck contains 36 cards")
+	var counts := {}
+	var originals := deck.cards.duplicate()
+	for card in originals:
+		check(card.rank >= 1 and card.rank <= 9, "card rank is within 1-9")
+		counts[card.rank] = counts.get(card.rank, 0) + 1
+	for rank in range(1, 10):
+		check(counts.get(rank, 0) == 4, "four copies of rank %d" % rank)
+	var dealt_cards := deck.deal(36)
+	var unique := {}
+	for card in dealt_cards:
+		unique[card] = true
+	check(unique.size() == 36, "each physical card is a distinct resource")
+	check(deck.cards.is_empty() and deck.discards.size() == 36, "dealing exhausts the deck without losing cards")
+	var recycled := deck.deal_one()
+	check(originals.has(recycled) and deck.cards.size() == 35 and deck.discards.size() == 1, "empty deck recycles its cards")
+	deck.shuffle()
+	check(deck.cards.size() == 36 and deck.discards.is_empty(), "reshuffling restores the full deck")
+	deck.queue_free()
+	await process_frame
+
+
 func _basic_round() -> void:
 	print("scenario: basic round, no raises, default play")
 	new_game()
@@ -335,13 +362,11 @@ func _direct_checks() -> void:
 	var p1: Player = game.player_1
 	var p2: Player = game.player_2
 	game.lead = p1
-	var C = CardData
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.SEVEN), C.new(C.Suit.SPADES, C.Rank.ACE)) == p1, "7 outranks A")
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.EIGHT), C.new(C.Suit.SPADES, C.Rank.ACE)) == p1, "8 outranks A")
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.ACE), C.new(C.Suit.SPADES, C.Rank.ROI)) == p1, "A outranks R")
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.DAME), C.new(C.Suit.SPADES, C.Rank.VALET)) == p1, "D outranks V")
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.NINE), C.new(C.Suit.SPADES, C.Rank.TEN)) == p2, "10 outranks 9")
-	check(game._trick_winner(C.new(C.Suit.HEARTS, C.Rank.VALET), C.new(C.Suit.SPADES, C.Rank.VALET)) == null, "equal ranks tie")
+	for lead_rank in range(1, 10):
+		for follow_rank in range(1, 10):
+			var expected: Player = p1 if lead_rank > follow_rank else p2 if follow_rank > lead_rank else null
+			check(game._trick_winner(CardData.new(lead_rank), CardData.new(follow_rank)) == expected,
+				"rank %d vs %d resolves correctly" % [lead_rank, follow_rank])
 
 	acted = 0
 	game.play_card(p1, null)

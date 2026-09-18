@@ -9,15 +9,22 @@ func check(ok: bool, message: String) -> void:
 func run() -> void:
 	var ui = load("res://ui/main.tscn").instantiate()
 	root.add_child(ui)
+	for rank in range(1, 10):
+		var card = load("res://components/card.tscn").instantiate()
+		card.data = CardData.new(rank)
+		root.add_child(card)
+		check(card.icon != null and card.icon.resource_path == "res://cards/card-%d.png" % rank, "Wrong artwork for rank %d" % rank)
+		check(card.text.is_empty() and card.tooltip_text == "Rank %d" % rank, "Card should show artwork with a rank tooltip")
+		card.queue_free()
 	ui._rules()
 	check(ui.page == "rules", "Rules navigation failed")
 	ui._tutorial_start()
 	ui._tutorial_advance()
 	ui._tutorial_advance()
-	ui._tutorial_card("9 Diamonds")
+	ui._tutorial_card(1)
 	check(ui.tutorial_step == 2 and not ui.tutorial_feedback.is_empty(), "Wrong card feedback failed")
-	ui._tutorial_card("7 Hearts")
-	ui._tutorial_card("8 Clubs")
+	ui._tutorial_card(9)
+	ui._tutorial_card(8)
 	check(ui.tutorial_step == 4, "Tutorial completion failed")
 	ui._menu()
 	ui._online_menu()
@@ -33,6 +40,10 @@ func run() -> void:
 			var state: Dictionary = session.snapshot_for(session.seat)
 			check(not state.has("deck") and not state.has("opponent_hand"), "Private state leaked")
 			check(session.snapshot_for(0).hand.is_empty(), "Spectator received hand")
+			for card in state.hand:
+				check(card.rank >= 1 and card.rank <= 9 and not card.has("suit"), "Hand must contain only numeric ranks 1-9")
+			for card in state.table:
+				check(card.rank >= 1 and card.rank <= 9 and card.seat in [1, 2], "Table must expose rank and owner for artwork")
 			check(not session.submit(3 - session.seat, "concede", -1, state.revision), "Wrong seat accepted")
 			check(not session.submit(session.seat, "concede", -1, state.revision - 1), "Stale action accepted")
 			ui._reveal()
@@ -55,5 +66,4 @@ func run() -> void:
 	await process_frame
 	print("UI CHECKS PASSED" if failures == 0 else "UI CHECKS FAILED: %d" % failures)
 	quit(0 if failures == 0 else 1)
-
 

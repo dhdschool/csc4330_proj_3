@@ -2,6 +2,9 @@ extends Node2D
 
 class_name Deck
 
+## Preserve four copies per rank so equal-rank tricks remain possible.
+const COPIES_PER_RANK: int = 4
+
 var cards: Array[CardData]
 var discards: Array[CardData] = []
 
@@ -16,9 +19,9 @@ func _process(delta: float) -> void:
 
 func create_cards() -> Array[CardData]:
 	var card_arr: Array[CardData] = []
-	for suit in CardData.Suit.values():
-		for rank in CardData.Rank.values():
-			card_arr.append(CardData.new(suit, rank))
+	for rank in range(CardData.MIN_RANK, CardData.MAX_RANK + 1):
+		for copy in range(COPIES_PER_RANK):
+			card_arr.append(CardData.new(rank))
 	return card_arr
 
 func shuffle() -> void:
