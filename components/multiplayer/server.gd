@@ -1,7 +1,5 @@
 extends Node
 
-class_name Server
-
 ## Authoritative multiplayer host for Le Truc.
 ##
 ## The server runs p2p on one player's machine; that player is also a client

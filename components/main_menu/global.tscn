@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://b5l4t015e2tll"]
+
+[ext_resource type="PackedScene" uid="uid://wtkhiw2s5c7c" path="res://components/multiplayer/client.tscn" id="2_os5vs"]
+[ext_resource type="PackedScene" uid="uid://d1ael51emypo1" path="res://components/multiplayer/server.tscn" id="3_d35yw"]
+[ext_resource type="PackedScene" uid="uid://dsbeqwm1g81y1" path="res://components/main_menu/main_menu.tscn" id="4_x1nxv"]
+
+[node name="Global" type="Node2D" unique_id=1984110550]
+
+[node name="Client" parent="." unique_id=2133524513 instance=ExtResource("2_os5vs")]
+
+[node name="Server" parent="." unique_id=2021955391 instance=ExtResource("3_d35yw")]
+
+[node name="MainMenu" parent="." unique_id=1081775029 instance=ExtResource("4_x1nxv")]

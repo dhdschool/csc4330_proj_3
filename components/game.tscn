@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://k2626isufqk8" path="res://components/game.gd" id="1_eb21c"]
 [ext_resource type="PackedScene" uid="uid://brkdc7eafdfv0" path="res://components/deck.tscn" id="2_axel1"]
 [ext_resource type="PackedScene" uid="uid://b3hk8tfdtvc3" path="res://components/player.tscn" id="2_md670"]
+[ext_resource type="Texture2D" uid="uid://byyflw0sdllg4" path="res://icon.svg" id="4_64axq"]
 
 [node name="Game" type="Node2D" unique_id=251731479]
 script = ExtResource("1_eb21c")
@@ -12,3 +13,7 @@ script = ExtResource("1_eb21c")
 [node name="Player1" parent="." unique_id=259204371 instance=ExtResource("2_md670")]
 
 [node name="Deck" parent="." unique_id=1905045642 instance=ExtResource("2_axel1")]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2036291518]
+position = Vector2(69, 72)
+texture = ExtResource("4_64axq")
